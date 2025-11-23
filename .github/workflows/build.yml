@@ -16,14 +16,13 @@ jobs:
         with:
           python-version: '3.12'
       
-      - name: Install dependencies
+      - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
-          sudo pip install pre-commit
           pip install -r requirements.txt
 
       - name: Run pre-commit hooks
-        run: pre-commit run --all-files
+        uses: pre-commit/action@v3.0.1
       
       - name: Install pyright
         run: npm install -g pyright
@@ -47,11 +46,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: ${{ vars.DOCKER_USERNAME }}/${{ github.event.repository.name }}:latest
-
         uses: docker/build-push-action@v6
         with:
           push: true
