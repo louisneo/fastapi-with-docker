@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import cast
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -11,10 +12,11 @@ from auth import (
     create_access_token,
     get_current_active_user,
 )
-from database import get_db
+from database import DBUser, get_db
 from models import User, UserCreate
 
 app = FastAPI(title="FastAPI Authentication with Database", version="1.0.0")
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
@@ -38,11 +40,17 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
     new_user = crud.create_user(db=db, user=user)
 
+    # Cast to proper types to fix Pyright errors
+    username = cast(str, new_user.username)
+    email = cast(str, new_user.email)
+    full_name = cast(str, new_user.full_name)
+    is_active = cast(bool, new_user.is_active)
+
     return User(
-        username=new_user.username,
-        email=new_user.email,
-        full_name=new_user.full_name,
-        disabled=not new_user.is_active,
+        username=username,
+        email=email,
+        full_name=full_name,
+        disabled=not is_active,
         roles=[role.name for role in new_user.roles],
     )
 
@@ -53,16 +61,20 @@ async def login_for_access_token(
 ):
     """Authenticate user and return JWT access token."""
     user = crud.authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    if not user or user is False:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Type narrowing: at this point user is DBUser
+    assert isinstance(user, DBUser)
+    username = cast(str, user.username)
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": username}, expires_delta=access_token_expires
     )
 
     return {"access_token": access_token, "token_type": "bearer"}

@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -12,9 +14,32 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.sql import func
 
-DATABASE_URL = "sqlite:///./auth.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+def get_database_url() -> str:
+    """Get database URL from environment variables or Docker secrets."""
+    # Read password from Docker secret file
+    password_file = os.getenv("POSTGRES_PASSWORD_FILE")
+
+    if password_file and os.path.exists(password_file):
+        with open(password_file) as f:
+            password = f.read().strip()
+    else:
+        # Fallback for local development
+        password = os.getenv("POSTGRES_PASSWORD", "postgres")
+
+    # Get other database config from environment
+    server = os.getenv("POSTGRES_SERVER", "localhost")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    db = os.getenv("POSTGRES_DB", "example")
+
+    return f"postgresql://{user}:{password}@{server}:5432/{db}"
+
+
+# Get database URL
+DATABASE_URL = get_database_url()
+
+# For PostgreSQL, we don't need check_same_thread
+engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -51,6 +76,7 @@ class DBRole(Base):
     users = relationship("DBUser", secondary=user_roles, back_populates="roles")
 
 
+# Create tables
 Base.metadata.create_all(bind=engine)
 
 
